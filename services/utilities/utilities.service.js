@@ -131,7 +131,7 @@ let resultData = data.map(row => {
         if (err) {
           console.error('Error deleting the file:', err);
         } else {
-          console.log('File deleted successfully:', filePath);
+          // console.log('File deleted successfully:', filePath);
         }
       });
     return mergedHeaders;
@@ -159,7 +159,7 @@ const readExcelFile=async (filePath)=>{
         // Extract headers (first row in the sheet)
         const headers = data[0]; // The first row will be the headers
     
-        console.log('Headers:', headers);
+       // console.log('Headers:', headers);
         // console.log('Data:', data.slice(1)); // Data excluding headers
     
         // return { headers, data: data.slice(1) };
