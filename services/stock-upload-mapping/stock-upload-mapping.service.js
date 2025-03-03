@@ -73,9 +73,10 @@ export const editMapping=async(req,res)=>{
 export const alreadyExistedMapping=async(req,res)=>{
     try{
         const pool=await getPool1();
-        let query;
-        await pool.request().input().query(query);
+        let query =` select * from stock_upload_mapping`;
+        const result =await pool.request().query(query);
   
+        return result.recordset;
   
       }
       catch(error){

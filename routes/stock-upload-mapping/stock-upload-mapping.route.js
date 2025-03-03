@@ -4,5 +4,5 @@ import { addColumnMapping, alreadyExistedColumnMapping, editColumnMapping, viewC
 router.post('/create',addColumnMapping);
 router.post('/view',viewColumnMapping);
 router.post('/edit',editColumnMapping);
-router.post('/already-existed',alreadyExistedColumnMapping)
+router.get('/all-existed-mapping',alreadyExistedColumnMapping)
 export default router;

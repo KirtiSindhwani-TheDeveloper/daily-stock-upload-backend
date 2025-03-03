@@ -1,4 +1,4 @@
-import { addMapping, editMapping, viewMapping } from "../../services/stock-upload-mapping/stock-upload-mapping.service.js";
+import { addMapping, editMapping, viewMapping,alreadyExistedMapping } from "../../services/stock-upload-mapping/stock-upload-mapping.service.js";
 
 export const addColumnMapping=async (req,res)=>{
         try{
@@ -54,7 +54,7 @@ export const alreadyExistedColumnMapping=async (req,res)=>{
            res.status(200).json({data:result});
        }
        catch(error){
-           console.error('Error in stock upload mapping controller:', error.message);
+           console.error('Error in already existed mapping stock upload mapping controller:', error.message);
    
           if (!res.headersSent) {
                res.status(500).json({ message: 'An error occurred while already existed column stock uplaod controller.', error: error.message });
