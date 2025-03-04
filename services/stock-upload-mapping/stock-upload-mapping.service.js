@@ -1,36 +1,39 @@
 import { getPool1 } from "../../connection.js"
-
+import moment from 'moment-timezone';
 export const addMapping=async (req,res)=>{
 
     try{
-       let stockType=req.stockType;
-       let  brandColumns=JSON.stringify(req.brandColumns);
-       let  brandId=req.brandId;
-       let  userId=req.userId;
-       let partNumber=req.values.partNumber;
-       let location=req.values.location;
-       let stockQty=req.values.stockQty;
+    //    let stockType=req.stockType;
+    //    let  brandColumns=JSON.stringify(req.brandColumns);
+    //    let  brandId=req.brandId;
+    //    let  userId=req.userId;
+    //    let partNumber=req.values.partNumber;
+    //    let location=req.values.location;
+    //    let stockQty=req.values.stockQty;
       const pool=await getPool1();
-      let query=`Insert into Stock_Upload_Mapping(part_number,stock_qty,loc,added_by,brand_id,stock_type,brandColumns) 
+      let query=`Insert into Stock_Upload_Mapping(part_number,stock_qty,loc,added_by,brand_id,stock_type,brandColumns,operation) 
       output inserted.id
-       values(@partNumber,@stockQty,@location,@userId,@brandId,@stockType,@brandColumns)`;
+       values(@partNumber,@stockQty,@location,@userId,@brandId,@stockType,@brandColumns,'create')`;
 
      const result= await pool.request()
-      .input('partNumber',partNumber)
-      .input('stockQty',stockQty)
-      .input('location',location)
-      .input('userId',userId)
-      .input('brandId',brandId)
-      .input('brandColumns',brandColumns)
-      .input('stockType',stockType)
+     .input('partNumber',req.values.partNumber)
+     .input('stockQty',req.values.stockQty)
+     .input('location',req.values.location)
+     .input('userId',req.userId)
+     .input('brandId',req.brandId)
+     .input('brandColumns',JSON.stringify(req.brandColumns))
+     .input('stockType',req.stockType)
       .query(query);
 
       let insertedId=result.recordset[0]?.id;
     //   console.log("result ",result,insertedId)
-      let logQuery=`Insert into Stock_Upload_Logs(added_by,mapping_id,operation_type) values(@userId, @insertedId,'create stock upload mapping')`
+      let logQuery=`Insert into Stock_Upload_Logs(added_by,operation_type,part_number,stock_qty,location) 
+      values(@userId,'create stock upload mapping',@partNumber,@stockQty,@location)`
     await pool.request()
-    .input('userId',userId)
-    .input('insertedId',insertedId)
+    .input('userId',req.userId)
+    .input('partNumber',req.values.partNumber)
+    .input('stockQty',req.values.stockQty)
+    .input('location',req.values.location)
     .query(logQuery);
 
 
@@ -58,11 +61,44 @@ export const viewMapping=async (req,res)=>{
 
 export const editMapping=async(req,res)=>{
     try{
-        const pool=await getPool1();
-        let query;
-        await pool.request().input().query(query);
-  
-  
+        const currentDateInIST = moment.tz("Asia/Kolkata").format('YYYY-MM-DD HH:mm:ss');
+       const pool=await getPool1();
+       let query=`Update Stock_Upload_Mapping set 
+       part_number=@partNumber,
+       stock_qty=@stockQty,
+       loc=@location,
+       added_by=@userId,
+       brand_id=@brandId,
+       stock_type=@stockType,
+       brandColumns=@brandColumns,
+       added_on=@currentDateInIST,
+       operation='update'
+       where id=@mappedId
+        `;
+ 
+       
+      const result= await pool.request()
+       .input('partNumber',req.values.partNumber)
+       .input('stockQty',req.values.stockQty)
+       .input('location',req.values.location)
+       .input('userId',req.userId)
+       .input('brandId',req.brandId)
+       .input('brandColumns',JSON.stringify(req.brandColumns))
+       .input('stockType',req.stockType)
+       .input('mappedId',req.id)
+       .input('currentDateInIST',currentDateInIST)
+       .query(query);
+ 
+      
+       let logQuery=`Insert into Stock_Upload_Logs(added_by,operation_type,part_number,stock_qty,location)
+        values(@userId,'update stock upload mapping',@partNumber,@stockQty,@location)`
+     await pool.request()
+     .input('userId',req.userId)
+     .input('partNumber',req.values.partNumber)
+    .input('stockQty',req.values.stockQty)
+    .input('location',req.values.location)
+     .query(logQuery);
+ 
       }
       catch(error){
           console.log("error in edit mapping in service ",error.message)

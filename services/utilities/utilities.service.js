@@ -6,7 +6,7 @@ export const getBrands=async ()=>{
  
     try{
         const pool=await getPool1();
-        const query=`Select * from SIMS_Brand_Master`;
+        const query=`Select distinct Brand as brand ,BrandId as brand_id from locationInfo where BrandStatus=1`;
         const result=await pool.request().query(query);
         return result.recordset;
 
