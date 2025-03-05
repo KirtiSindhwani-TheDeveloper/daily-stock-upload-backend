@@ -26,14 +26,18 @@ export const uploadFile=async (req)=>{
         // console.log("brandId ",brandId,req)
         let filePath=req.file.path;
         let headers;
+        let data;
         if(brandId==33 || brandId==11){
-           console.log(brandId);
-          headers=  await readExcelFileWithSubColumns(filePath);
+          //  console.log(brandId);
+          data=  await readExcelFileWithSubColumns(filePath);
+          headers=data.headers
         }
         else{
-          headers=  await readExcelFile(filePath);
+          data=  await readExcelFile(filePath);
+          headers=data.headers
         }
-        return headers;
+        // console.log(data?.header)
+         return {headers:headers,data:data.data};
     }
     catch(error){
         console.error('Error executing SQL query to in upload File:', error.message);
@@ -119,13 +123,13 @@ const readExcelFileWithSubColumns=async (filePath)=>{
     data.splice(1, 1); // Remove the second header row
    
     // Convert data to an array of objects
-let resultData = data.map(row => {
-  let obj = {};
-  mergedHeaders.forEach((header, index) => {
-    obj[header] = row[index];  // Assign the corresponding value for each header
-  });
-  return obj;
-});
+    let resultData = data.map(row => {
+      let obj = {};
+      mergedHeaders.forEach((header, index) => {
+        obj[header] = row[index];  // Assign the corresponding value for each header
+      });
+      return obj;
+    });
     // console.log('Excel file saved with merged headers!',mergedHeaders);
     fs.unlink(filePath, (err) => {
         if (err) {
@@ -134,7 +138,7 @@ let resultData = data.map(row => {
           // console.log('File deleted successfully:', filePath);
         }
       });
-    return mergedHeaders;
+    return {headers:mergedHeaders,data:resultData};
   } catch (error) {
     console.error('Error reading the Excel file:', error);
   }
@@ -170,7 +174,16 @@ const readExcelFile=async (filePath)=>{
             console.log('File deleted successfully:', filePath);
           }
         });
-        return headers;
+        let resultData = data.map(row => {
+          let obj = {};
+          headers.forEach((header, index) => {
+            obj[header] = row[index];  // Assign the corresponding value for each header
+          });
+          return obj;
+        });
+        //  console.log("header ",resultData)
+        return {headers:headers,data:resultData};
+       
     }
     catch(error){
         console.log("error in reading the excel file ",error.message)
@@ -178,4 +191,4 @@ const readExcelFile=async (filePath)=>{
     }
 }
 
-export default {getBrands};
+export  {readExcelFile,readExcelFileWithSubColumns};
