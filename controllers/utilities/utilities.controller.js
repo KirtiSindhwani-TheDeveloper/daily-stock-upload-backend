@@ -1,5 +1,5 @@
 
-import {getBrands,uploadFile} from '../../services/utilities/utilities.service.js'
+import {getBrands,uploadFile,getDealersBasedOnBrandIDInService,getLocationsInService} from '../../services/utilities/utilities.service.js'
 export const getBrandsInController=async (req,res)=>{
 
     try{
@@ -31,5 +31,30 @@ export const uploadFileInController=async (req,res)=>{
         res.status(500).json({ message: 'An error occurred while uploading the file.', error: error.message });
     }
 
+
+
+}
+
+export const getDealers=async function(req,res){
+
+    try{
+        const result=await getDealersBasedOnBrandIDInService(req.body);
+        return res.json({status:200,data:result});
+    }
+    catch(error)
+    {
+        res.json({error:"Dealers are not fetched",status:500})
+    }
+}
+
+export const  getLocations=async function(req,res){
+    try{
+        const result=await getLocationsInService(req.body);
+        return res.json({status:200,data:result});
+    }
+    catch(error)
+    {
+        res.json({error:"Dealers are not fetched",status:500})
+    }
 }
 

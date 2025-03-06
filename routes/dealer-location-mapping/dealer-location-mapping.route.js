@@ -1,6 +1,6 @@
 import express from 'express';
 const router=express.Router();
-import addDealerLocationMapping from '../../controllers/dealer-location-mapping/dealer-location-mapping.controller.js';
+import {addDealerLocationMapping,exportUploadedDataInController} from '../../controllers/dealer-location-mapping/dealer-location-mapping.controller.js';
 import fs from 'fs'
 import multer from 'multer';
 // import {multer} from 'multer';
@@ -20,5 +20,5 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 router.post('/create',upload.single('excelFile'),addDealerLocationMapping)
-
+router.post('/export',exportUploadedDataInController)
 export default router;

@@ -1,6 +1,6 @@
 import express from 'express';
 const router=express.Router();
-import {getBrandsInController,uploadFileInController} from '../../controllers/utilities/utilities.controller.js';
+import {getBrandsInController,uploadFileInController,getDealers,getLocations} from '../../controllers/utilities/utilities.controller.js';
 import fs from 'fs'
 import multer from 'multer';
 // import {multer} from 'multer';
@@ -22,4 +22,6 @@ const upload = multer({ storage: storage });
 
 router.route('/brands').get(getBrandsInController)
 router.post('/upload',upload.single('excelFile'),uploadFileInController)
+router.post('/dealers',getDealers)
+router.post('/locations',getLocations)
 export default router;

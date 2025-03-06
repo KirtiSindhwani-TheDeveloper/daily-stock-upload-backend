@@ -1,5 +1,6 @@
 import { getPool1 } from "../../connection.js"
-import {readExcelFileWithSubColumns,readExcelFile} from '../utilities/utilities.service.js'
+import {readExcelFile} from '../utilities/utilities.service.js'
+import sql from 'mssql';
 const addDealerLocationMappingInService=async (req,res)=>{
     try{
         let brandId=req.body.brand_id;
@@ -7,86 +8,115 @@ const addDealerLocationMappingInService=async (req,res)=>{
         let rowData;
         let rowCount;
         let headers;
-        let userId=req.body.added_by;
+        let userId=parseInt(req.body.added_by,10);
         let filePath=req.file.path;
-        isDealerAndLocationExist=true;
-        if(brandId==33 || brandId ==11){
-            fileData=await readExcelFileWithSubColumns(filePath)
-            
-        }
-        else{
-            fileData=await readExcelFile(filePath)
-        }
-
+       let  isDealerAndLocationExist=true;        
+        fileData=await readExcelFile(filePath)
+        const pool=await getPool1();
+        const dealerLocationNotInMaster = [];
         headers=fileData.headers;
-        rowData=fileData.data;
-        rowCount=fileData.length;
+        rowData=fileData.data.splice(1);
+        rowCount=rowData.length;
+        // console.log("brand Id ",brandId,rowCount,headers);
 
         const  lowerCaseHeaders=headers.map((header)=> header.trim().toLowerCase());
 
         if(!lowerCaseHeaders.includes('dealer') && !lowerCaseHeaders.includes('location')){
             isDealerAndLocationExist=false
+            console.log("is dealer location exist in file ",isDealerAndLocationExist)
             return {isDealerAndLocationPresent:isDealerAndLocationExist};
         }
+
          let isDealerAndLocationNull=await checkFields(rowData);
+        //  console.log("is dealer location null in file ",isDealerAndLocationNull)
 
          if(isDealerAndLocationNull){
             return {isDealerAndLocationPresent:isDealerAndLocationNull}
          }
 
-         let getDealerAndLocationQuery='Select dealer,location,dealerid,locationid from locationInfo where status=1 and dealerStatus=1';
-         const dealerAndLocationResult=await pool.request().query(getDealerAndLocationQuery);
+         let getDealerAndLocationQuery='Select dealer,location,dealerId,locationId from locationInfo where status=1 and dealerStatus=1 and brandId=@brandId';
+         const res=await pool.request().input('brandId',brandId).query(getDealerAndLocationQuery);
+         let dealerAndLocationResult=res.recordset;
+        //  console.log("dealer location result",dealerAndLocationResult)
+        //  let dealerLocationNotInMaster=[];
 
-         let dealerLocationNotInMaster=[];
-
-         rowData.forEach((row)=>{
+         rowData.forEach((row,index)=>{
 
             const normalizedItem=Object.keys(row).reduce((acc,key)=>{
-                acc[key.trim().toLowerCase()]=item[key];
+                acc[key.trim().toLowerCase()]=row[key];
                 return acc
+
+
             },{});
+        
+            rowData[index]=normalizedItem;
+            // console.log(normalizedItem)
+            // console.log("dealer location ",dealerAndLocationResult)
+           
+            const exists = dealerAndLocationResult.some(obj2 => obj2.dealer.trim() === normalizedItem.dealer.trim() && normalizedItem.location.trim() === obj2.location.trim());
+    
+            // console.log("exists ",exists)
+    // If it does not exist, push the object into array2
+            if (!exists) {
+                dealerLocationNotInMaster.push(normalizedItem);
+            }else{
+                const matchingItem = dealerAndLocationResult.find(obj2 => {
 
-            dealerAndLocationResult.forEach((data)=>{
+                    return  obj2.dealer.trim() === normalizedItem.dealer &&
+                      normalizedItem.location.trim() === obj2.location
+                    
+                });
+            //   console.log("matching item ",matchingItem)
 
-                if(normalizedItem['dealer']!=data.dealer || normalizedItem['location']!=data.location){
-                    dealerLocationNotInMaster.push({
-                        dealer:data.dealer,
-                        location:data.location
-                    })
-                }
-            })
-
-            if(dealerLocationNotInMaster.length!=0){
-                return {dealerLocationNotInMasterPresent:true}
+                  if (matchingItem) {
+                    // Add `dealerId` and `locationId` to the normalized item
+                    normalizedItem.dealerId = matchingItem.dealerId;
+                    normalizedItem.locationId = matchingItem.locationId;
+                  }
             }
 
+           
+        })
+        //  console.log("dealer location not in master ",dealerLocationNotInMaster)
 
+        if(dealerLocationNotInMaster.length!=0){
+            return {dealerLocationNotInMasterPresent:true}
+        }
+            // console.log("rowData ",rowData)
+
+          
+      let currentDateTime =await getCurrentDateTimeInIST();
+      let operation= "create dealer location mapping"
             const values = rowData.map(item => {
                
                 return [
-               brandId,
-               item["dealer"],
-               item["inventory location"],
-               item["locationId"],
-               item["added_by"],
-               item["added_on"],
-               "create dealer location mapping"
+                    parseInt(brandId, 10),  // Ensure brandId is an integer
+                    parseInt(item["dealerId"], 10), // Ensure dealerId is an integer
+                    item["inventory location"].toString(),  // Ensure inventory_location is a string
+                    parseInt(item["locationId"], 10), // Ensure locationId is an integer
+                    parseInt(userId, 10), // Ensure userId is an integer
+                   operation,
+                   item["dealer"],
+                   item["location"]
 
             ]
             })
+
+            // console.log("values ",values);
         
+            try {
             const table = new sql.Table('Dealer_Location_Mapping'); // Updated table name
             table.create = false;
         
-            // Define columns based on your new schema
-            table.columns.add('brandId', sql.Int, { nullable: true }); // [Order No]
-            table.columns.add('dealerId', sql.Int, { nullable: true }); // [Part No]
-            table.columns.add('inventory_location', sql.nvarchar(100), { nullable: true }); // [Recd Qty]
-            table.columns.add('locationID', sql.Int, { nullable: true }); // [Status]
-            table.columns.add('added_by', sql.Int, { nullable: true }); // [Ware House Name]
-            table.columns.add('added_on', sql.dateTime, { nullable: true }); // [Payer Code]
-            table.columns.add('operation', sql.VarChar(100), { nullable: true }); // [Division Name]
-          
+            table.columns.add('brandId', sql.Int, { nullable: true }); 
+            table.columns.add('dealerId', sql.Int, { nullable: true }); 
+            table.columns.add('inventory_location', sql.VarChar(100), { nullable: true }); 
+            table.columns.add('locationID', sql.Int, { nullable: true });
+            table.columns.add('added_by', sql.Int, { nullable: true }); 
+            //  table.columns.add('added_on', sql.DateTime, { nullable: true, default: sql`GETDATE()` }); 
+            table.columns.add('operation', sql.VarChar(100), { nullable: true }); 
+            table.columns.add('dealer', sql.VarChar(200), { nullable: true }); 
+            table.columns.add('location', sql.VarChar(200), { nullable: true }); 
         
             // Add rows to the table
             values.forEach((row) => {
@@ -96,35 +126,73 @@ const addDealerLocationMappingInService=async (req,res)=>{
                     row[2],  // inventory_location
                     row[3],  // locationid
                     row[4],  // added_by
-                    row[5],  // added_on
-                    row[6],  // operation
+                    row[5],
+                    row[6],   // operation
+                    row[7],
+                  
+                      
                    
                 );
             });
-         })
-
-        const pool=await getPool1();
-        try {
-           
             await pool.request().bulk(table);
+            
            
         } catch (error) {
             console.error('Error during bulk insert:', error);
             return error; // Rethrow the error for further handling if necessary
         }
 
-        let logQuery=`Insert into Stock_Upload_Logs(brand_id,added_by,operation,dealerLocationMappingRowCount) 
+        let logQuery=`Insert into Stock_Upload_Logs(brand_id,added_by,operation_type,dealerLocationMappingRowCount) 
         values(@brandId,@userId,'create dealer location mapping',@rowCount)`;
 
         await pool.request().input('brandId',brandId)
-        .input('userId',userId).query(logQuery)
+        .input('userId',userId)
+        .input('rowCount',rowCount).query(logQuery)
+
+        return {insertedSuccessfully:true}
+    }
+    catch(error){
+        console.log("error",error.message)
+        return error;
+    }
+}
+const checkFields=(arr)=>{
+    return arr.some(item => item.dealer === null || item.location === null);
+}
+
+const exportUploadedData=async (req,res)=>{
+
+    try{
+        let brandId=req.brand_id;
+        const pool=await getPool1();
+        // console.log(brandId)
+        let query=`Select dealer,location ,inventory_location,added_by,added_on,brandId from dealer_location_mapping where brandId=@brandId`;
+        const result=await pool.request().input('brandId',brandId).query(query);
+
+        // console.log(result.recordset);
+
+        return result.recordset;
     }
     catch(error){
         return error;
     }
 }
-const checkFields=(arr)=>{
-    arr.some(item => item.dealer === null || item.location === null);
 
+const  getCurrentDateTimeInIST=async ()=> {
+    
+        // Get current date in UTC
+        const nowUTC = new Date();
+    
+        // Convert UTC date to IST (Asia/Kolkata)
+        const options = {
+            timeZone: 'Asia/Kolkata', // IST timezone
+        };
+    
+        // Create a new date object in IST
+        const istDate = new Date(
+            new Intl.DateTimeFormat('en-IN', options).format(nowUTC)
+        );
+    
+        return istDate;
 }
-export default  addDealerLocationMappingInService
+export   {addDealerLocationMappingInService,exportUploadedData}
