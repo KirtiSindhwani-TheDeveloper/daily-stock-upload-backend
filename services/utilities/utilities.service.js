@@ -225,10 +225,10 @@ export const getLocationsInService= async function (req) {
   try {
     const pool = await getPool1();
    
-    dealer_id = req.dealer_id;
+    let dealer_id = req.dealer_id;
    
     const query = `
-   Select locationID as location_id,location as location_name from z_scope.dbo.locationInfo where dealerID=@dealer_id and status=1
+   Select locationID as location_id,location as location_name from  locationInfo where dealerID=@dealer_id and status=1
   `;
 
     // Execute the insert query for each row
@@ -240,7 +240,7 @@ export const getLocationsInService= async function (req) {
 
     return result.recordset;
   } catch (err) {
-    console.log("error in fetching data", err.message);
+    console.log("error in fetching data in utilities service in location method", err.message);
     await transaction.rollback();
   }
 }

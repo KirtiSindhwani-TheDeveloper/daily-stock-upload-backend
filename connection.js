@@ -12,7 +12,7 @@ const config1 = {
         trustServerCertificate: true,  // Helps with certain SQL Server errors
     },
     requestTimeout: 6000000, // 30 seconds
-    connectionTimeout: 30000, // 30 seconds
+    connectionTimeout: 6000000, // 30 seconds
 };
  
 

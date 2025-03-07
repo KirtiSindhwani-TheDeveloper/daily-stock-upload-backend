@@ -1,5 +1,5 @@
 
-import {addDealerLocationMappingInService,exportUploadedData} from '../../services/dealer-location-mapping/dealer-location-mapping.service.js';
+import {addDealerLocationMappingInService,exportUploadedData,editDealerLocationMappingInService} from '../../services/dealer-location-mapping/dealer-location-mapping.service.js';
 const addDealerLocationMapping=async (req,res)=>{
 
     try{       
@@ -25,4 +25,16 @@ const exportUploadedDataInController=async (req,res)=>{
     }
 }
 
-export { addDealerLocationMapping,exportUploadedDataInController}
+const editDealerLocationMapping=async(req,res)=>{
+    try{       
+        const result= await editDealerLocationMappingInService(req);
+        res.status(200).json(result);
+        
+    }
+    catch(error){
+        console.log("error in add dealer location mapping ",error.message)
+        res.status(201).json({message:error.message})
+    }
+}
+
+export { addDealerLocationMapping,exportUploadedDataInController,editDealerLocationMapping}
