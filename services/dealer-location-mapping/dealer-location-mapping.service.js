@@ -15,10 +15,11 @@ const addDealerLocationMappingInService=async (req,res)=>{
         const pool=await getPool1();
         const dealerLocationNotInMaster = [];
         headers=fileData.headers;
-        rowData=fileData.data.splice(1);
+        rowData=fileData.data;
         rowCount=rowData.length;
         // console.log("brand Id ",brandId,rowCount,headers);
 
+     
         const  lowerCaseHeaders=headers.map((header)=> header.trim().toLowerCase());
 
         if(!lowerCaseHeaders.includes('dealer') && !lowerCaseHeaders.includes('location')){
@@ -27,11 +28,12 @@ const addDealerLocationMappingInService=async (req,res)=>{
             return {isDealerAndLocationPresent:isDealerAndLocationExist};
         }
 
+        // console.log("pahuch gya yha tak")
          let isDealerAndLocationNull=await checkFields(rowData);
-        //  console.log("is dealer location null in file ",isDealerAndLocationNull)
+        //   console.log("is dealer location null in file ",isDealerAndLocationNull)
 
          if(isDealerAndLocationNull){
-            return {isDealerAndLocationPresent:isDealerAndLocationNull}
+            return {isDealerAndLocationNull:isDealerAndLocationNull}
          }
 
          let getDealerAndLocationQuery='Select dealer,location,dealerId,locationId from locationInfo where status=1 and dealerStatus=1 and brandId=@brandId';
@@ -156,9 +158,22 @@ const addDealerLocationMappingInService=async (req,res)=>{
         return error;
     }
 }
-const checkFields=(arr)=>{
-    return arr.some(item => item.dealer === null || item.location === null);
+const checkFields=async(arr)=>{
+
+   arr= await convertKeysToLowercase(arr);
+    return arr.some(item => (item.dealer === null || item.dealer==undefined) || item.location === null|| item.location==undefined);
 }
+const convertKeysToLowercase = (arr) => {
+    return arr.map(item => {
+      const newItem = {};
+      for (let key in item) {
+        if (item.hasOwnProperty(key)) {
+          newItem[key.toLowerCase()] = item[key];
+        }
+      }
+      return newItem;
+    });
+  };
 
 
 const editDealerLocationMappingInService=async(req,res)=>{
@@ -180,21 +195,23 @@ const editDealerLocationMappingInService=async(req,res)=>{
       
         const dealerLocationNotInMaster = [];
         headers=fileData.headers;
-        rowData=fileData.data.splice(1);
+        rowData=fileData.data;
        
         const  lowerCaseHeaders=headers.map((header)=> header.trim().toLowerCase());
 
         if(!lowerCaseHeaders.includes('dealer') && !lowerCaseHeaders.includes('location')){
             isDealerAndLocationExist=false
-            console.log("is dealer location exist in file ",isDealerAndLocationExist)
+            // console.log("is dealer location exist in file ",isDealerAndLocationExist)
             return {isDealerAndLocationPresent:isDealerAndLocationExist};
         }
 
+        //  console.log("headers ",headers,rowData)
+        
          let isDealerAndLocationNull=await checkFields(rowData);
-        //  console.log("is dealer location null in file ",isDealerAndLocationNull)
+        //   console.log("is dealer location null in file ",isDealerAndLocationNull)
 
          if(isDealerAndLocationNull){
-            return {isDealerAndLocationPresent:isDealerAndLocationNull}
+            return {isDealerAndLocationNull:isDealerAndLocationNull}
          }
 
          let getDealerAndLocationQuery='Select dealer,location,dealerId,locationId from locationInfo where status=1 and dealerStatus=1 and brandId=@brandId';
@@ -280,7 +297,7 @@ const editDealerLocationMappingInService=async(req,res)=>{
                     return element;
                 });
             }
-            console.log("updated mapped dta",mappedData1)
+            // console.log("updated mapped dta",mappedData1)
         })
 
         mappedData1.forEach(async (item)=>{
@@ -402,7 +419,7 @@ const exportUploadedData=async (req,res)=>{
 const deleteQuery=async (updatedElement)=>{
 
     const pool=await getPool1();
-    console.log(updatedElement);
+    // console.log(updatedElement);
     let id=updatedElement.id;
     
     let deleteQuery=`Delete from dealer_location_mapping where id=@id `;

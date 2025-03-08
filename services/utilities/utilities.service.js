@@ -128,10 +128,19 @@ const readExcelFileWithSubColumns = async (filePath) => {
     data.splice(1, 1); // Remove the second header row
 
     // Convert data to an array of objects
-    let resultData = data.map((row) => {
+    // let resultData = data.map((row) => {
+    //   let obj = {};
+    //   mergedHeaders.forEach((header, index) => {
+    //     obj[header] = row[index]; // Assign the corresponding value for each header
+    //   });
+    //   return obj;
+    // });
+
+    let resultData = data.slice(1).map((row) => {
       let obj = {};
-      mergedHeaders.forEach((header, index) => {
-        obj[header] = row[index]; // Assign the corresponding value for each header
+      row.forEach((cell, index) => {
+        // Remove special characters from each cell value
+        obj[headers[index]] = removeSpecialCharacters(cell);
       });
       return obj;
     });
@@ -180,10 +189,18 @@ const readExcelFile = async (filePath) => {
         console.log("File deleted successfully:", filePath);
       }
     });
-    let resultData = data.map((row) => {
+    // let resultData = data.map((row) => {
+    //   let obj = {};
+    //   headers.forEach((header, index) => {
+    //     obj[header] = row[index]; // Assign the corresponding value for each header
+    //   });
+    //   return obj;
+    // });
+    let resultData = data.slice(1).map((row) => {
       let obj = {};
-      headers.forEach((header, index) => {
-        obj[header] = row[index]; // Assign the corresponding value for each header
+      row.forEach((cell, index) => {
+        // Remove special characters from each cell value
+        obj[headers[index]] = removeSpecialCharacters(cell);
       });
       return obj;
     });
@@ -221,6 +238,11 @@ return result.recordset
   
 }
 
+const removeSpecialCharacters = (str) => {
+  // This regular expression removes all non-alphanumeric characters (except spaces)
+  str=str+'';
+  return str.replace(/[^a-zA-Z0-9 ]/g, '');
+};
 export const getLocationsInService= async function (req) {
   try {
     const pool = await getPool1();

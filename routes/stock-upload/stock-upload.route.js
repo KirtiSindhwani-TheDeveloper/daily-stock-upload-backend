@@ -1,8 +1,8 @@
-import express from express;
+import express from 'express';
 const router=express.Router();
 import multer from "multer";
 import fs from 'fs';
-import uploadDataSingleLocation from '../../controllers/stock-upload/stock-upload.controller.js'
+import {uploadDataSingleLocation,getPartNotInMasterSingleLocation,allRecordsSingleLocation} from '../../controllers/stock-upload/stock-upload.controller.js'
 
 const uploadsDir='./mapping-uploads';
 if (!fs.existsSync(uploadsDir)) {
@@ -20,4 +20,8 @@ const storage = multer.diskStorage({
 });
 const upload=multer({storage:storage});
 
-router.post('/single-location',upload.single('excelFile',uploadDataSingleLocation))
+router.post('/single-location',upload.single('excelFile'),uploadDataSingleLocation)
+router.post('/part-not-in-master',getPartNotInMasterSingleLocation)
+router.post('/all-records',allRecordsSingleLocation)
+
+export default router
