@@ -1,4 +1,5 @@
-import {stockUploadSingleLocation,getPartNotInMasterSingleLocationInService,getAllRecordsSingleLocation} from '../../services/stock-upload/stock-upload.service.js'
+import {stockUploadSingleLocation,getPartNotInMasterSingleLocationInService,
+    getAllRecordsSingleLocation,getUploadedDataSingleLocationInService} from '../../services/stock-upload/stock-upload.service.js'
 const uploadDataSingleLocation=async (req,res)=>{
 
     try{
@@ -35,4 +36,16 @@ const getPartNotInMasterSingleLocation=async (req,res)=>{
         res.status(201).json({error:error.message});
     }
 }
-export  {uploadDataSingleLocation,allRecordsSingleLocation,getPartNotInMasterSingleLocation}
+
+const uploadedDataSingleLocation=async(req,res)=>{
+    try{
+
+        const result=await getUploadedDataSingleLocationInService(req.body);
+        res.status(200).json({data:result});
+    }
+    catch(error){
+
+        res.status(201).json({error:error.message});
+    }
+}
+export  {uploadDataSingleLocation,allRecordsSingleLocation,getPartNotInMasterSingleLocation,uploadedDataSingleLocation}

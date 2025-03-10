@@ -76,42 +76,10 @@ const stockUploadSingleLocation=async (req,res)=>{
       let partMasterResult=result.recordset;
       let partNotInMasterArray=[];
     //   console.log(partMasterResult)
-
-    //  filteredRowData.forEach( (item) => {
-    //     let deleteItem = false;  // Flag to determine if the item should be deleted
-        
-    //     partMasterResult.map( (element) => {            
-
-    //     if (item.part_number === element.partnumber1.trim()) {
-    //         // Add the partid to the item if a match is found
-    //         // console.log(element);
-            
-    //        item={...item, partId :element.partID};  // Assuming the 'partid' field is available in partMasterResult
-    //         //console.log(item)
-    //         // Reset deleteItem flag as match was found
-    //         deleteItem = false;
-    //     } else {
-    //         // If no match, handle the case where item doesn't exist in partMasterResult
-    //         const partnumber = item.part_number;
-    //         const exists = partNotInMasterArray.some(item1 => item1.partNumber === partnumber);
-    //         if (!exists) {
-    //             partNotInMasterArray.push({partNumber: partnumber});
-    //         }
-    //         deleteItem = true;
-    //     }
-    //     });
-    
-    //     // After all insertions are done, remove the item from filteredRowData if necessary
-    //     if (deleteItem) {
-    //         const index = filteredRowData.indexOf(item);
-    //         if (index !== -1) {
-    //             filteredRowData.splice(index, 1);  // Remove the item from filteredRowData
-    //         }
-    //     }
-        
-    // });
+      const deletePartNumberQuery=`delete from part_not_in_master where brand_id=@brandId`;
+      await pool.request().input('brandId',brandId).query(deletePartNumberQuery)
     const itemsToDelete = [];
-    const updatedFilteredRowData=[]
+    let updatedFilteredRowData=[]
     for (const item of filteredRowData) {
         let deleteItem = false;  // Flag to determine if the item should be deleted
 
@@ -133,24 +101,100 @@ const stockUploadSingleLocation=async (req,res)=>{
         // If no match was found, flag for deletion and add to partNotInMasterArray
         if (deleteItem) {
             const partnumber = item.part_number;
+            // console.log("partnumber ",partnumber)
             const exists = partNotInMasterArray.some(item1 => item1.partNumber === partnumber);
             if (!exists) {
                 partNotInMasterArray.push({ partNumber: partnumber });
             }
         }
 
-        //     // Mark the item for deletion
-        //     itemsToDelete.push(item);
-        // }
+       
     }
-
-    // // After processing, remove the flagged items from filteredRowData
     // filteredRowData = filteredRowData.filter(item => !itemsToDelete.includes(item));
-   
 
+    // Create a map to track the occurrences of part_number and total stock_qty
+const partCountMap = new Map();
+
+// First, count the occurrences and accumulate stock_qty for each part_number
+for (const element of updatedFilteredRowData) {
+    // Assuming partMasterResult contains part_number and stock_qty
+    if (partCountMap.has(element.part_number)) {
+        // console.log("part ",element);
+        partCountMap.set(element.part_number, {
+           
+            partId:element.partId,
+            count: partCountMap.get(element.part_number).count + 1,
+            stockQty: parseFloat(partCountMap.get(element.part_number).stockQty) + parseFloat(element.qty)
+        });
+        
+    } else {
+        partCountMap.set(element.part_number, { count: 1, stockQty: parseFloat(element.qty),partId:element.partId });
+    }
+}
+
+// console.log("updated filtered data ",partCountMap)
+updatedFilteredRowData = Array.from(partCountMap, ([partNumber, { stockQty,partId }]) => ({
+    partNumber,
+    qty: stockQty,
+    partId:partId
+  }));
+//   console.log("updated filtered data ",partCountMap);
+
+
+ 
+  let insertedDataQuery=`Select partID,qty,ck2.StockCode from currentStock2 ck2  join currentStock1 ck1 on ck2.StockCode=ck1.tcode where locationId=@locationId`;
+
+  let result56=await pool.request().input('locationId',locationId).query(insertedDataQuery);
+ let insertedDataResult=result56.recordset;
+ let countPrevRecords=insertedDataResult.length;
+
+ let quantitySumPrev=0;
+ if(insertedDataResult.length!=0){
+    // console.log("countRecords inserted ",countPrevRecords)
+    let StockCode=insertedDataResult[0].StockCode;
+    let quanitySumQuery=`Select sum(qty) as QuantSum from currentStock2 where StockCode=@StockCode`;
+
+    let result567=await pool.request().input('StockCode',StockCode).query(quanitySumQuery);
+   
+    if(result567.recordset.length!=0){
+        quantitySumPrev=result567.recordset[0].QuantSum;
+        // console.log("quant sum prev ",quantitySumPrev);
+        let deleteQuery=`delete from currentStock2  where StockCode=@stockCode`;
+        await pool.request().input('stockCode',insertedDataResult[0].StockCode).query(deleteQuery);
+       
+        let deleteQuery1=`delete from currentStock1  where tcode=@stockCode`;
+        await pool.request().input('stockCode',insertedDataResult[0].StockCode).query(deleteQuery1);
+    }
     
+   
+   
+    // console.log("updatedFiltered ",updatedFilteredRowData)
+   updatedFilteredRowData.forEach((item) => {
+    // console.log(item)
+    let partID = item.partId;
+    let qty=item.qty;
+    
+    for (let i = 0; i < insertedDataResult.length; i++) {
+        const element = insertedDataResult[i];
+        // console.log(element,partID)
+        if (element.partID === partID) {
+            // Add the qty to the item.qty
+            item.qty = qty + element.qty;
+            break;  // Exit the loop after the first match
+        }
+    }
+});
+
+//  console.log("after update ",updatedFilteredRowData);
+
       
-    //   console.log("filtered row data ",partNotInMasterArray);
+    //   console.log(updatedFilteredRowData);
+ }
+
+
+// Log the updated partCountObj
+//  console.log(updatedFilteredRowData);
+
     let rowCount=updatedFilteredRowData?.length;
     let currentDate = new Date();
     const formattedDate = currentDate.toISOString().split('T')[0]; // Outputs: '2025-03-08'
@@ -197,7 +241,7 @@ const stockUploadSingleLocation=async (req,res)=>{
                 return [
                     
                     parseInt(tCode,10),
-                    item["part_number"],
+                    item["partNumber"],
                     parseFloat(item["qty"]),
                    item["partId"]
                   
@@ -234,13 +278,19 @@ const stockUploadSingleLocation=async (req,res)=>{
                 console.error('Error during bulk insert:', error);
                 return error; // Rethrow the error for further handling if necessary
             }
-      let logQuery=`insert into Stock_Upload_Logs(stockCode,added_by,brand_id, stockUploadCount,operation_type) values(@tCode,@addedBy,@brandId,@rowCount,'upload stock')`;
-        await pool.request().input('tCode',tCode).input('addedBy',addedBy)
-        .input('brandId',brandId).input('rowCount',rowCount).query(logQuery);
+            let currentCountQuery=`select sum(qty) as currentQuantSum from currentStock2 where stockCode=@tCode`;
+            let result678=await pool.request().input('tCode',tCode).query(currentCountQuery);
+            let currentQuantSum=0;
+            if(result678.recordset.length!=0){
+                currentQuantSum=result678.recordset[0].currentQuantSum;
+            }
+            
+      let logQuery=`insert into Stock_Upload_Logs(location_id,stockCode,added_by,brand_id, stockUploadCount,operation_type,quantitySum,
+      prevStockUploadCount,prevQuantitySum) values(@locationId,@tCode,@addedBy,@brandId,@rowCount,'upload stock',@currentQuantSum,@countPrevRecords,@quantitySumPrev)`;
+        await pool.request().input('tCode',tCode).input('addedBy',addedBy).input('currentQuantSum',currentQuantSum)
+        .input('brandId',brandId).input('locationId',locationId).input('rowCount',rowCount).input('quantitySumPrev',quantitySumPrev).input('countPrevRecords',countPrevRecords).query(logQuery);
    
-    // if(hasNullOrEmptyPartNumberAndQuantity){
-    //     return {partNumberAndQuantityNull:true}
-    // }
+  return {currentSumQuantity:currentQuantSum,prevSumQuantity:quantitySumPrev,currentRecords:rowCount,prevRecords:countPrevRecords}
     
 
 
@@ -255,9 +305,10 @@ const getPartNotInMasterSingleLocationInService=async (req,res)=>{
         let getBrandQuery=`Select brandId from locationInfo where locationId=@locationId`;
         const result=await pool.request().input('locationId',locationId).query(getBrandQuery);
         let brandId=result.recordset[0].brandId;
+        // console.log(brandId);
         let getQuery=`Select partnumber from part_not_in_master where brand_id=@brandId`;
         const result1=await pool.request().input('brandId',brandId).query(getQuery);
-
+        // console.log(result1.recordset)
         return result1.recordset;
     }
     catch(error){
@@ -272,6 +323,23 @@ const getAllRecordsSingleLocation=async (req,res)=>{
     try{
         const pool=await getPool1();
         let locationId=req.location_id;
+        let getQuery=`select added_on,added_by,stockUploadCount,quantitySum,prevQuantitySum,prevStockUploadCount from stock_upload_logs where location_id=@locationId`;
+
+        const result=await pool.request().input('locationId',locationId).query(getQuery);
+
+        return result.recordset;
+
+    }
+    catch(error){
+        console.log("error in stock upload service in getAll records single loc",error.message)
+        return error;
+    }
+}
+
+const getUploadedDataSingleLocationInService=async(req,res)=>{
+    try{
+        const pool=await getPool1();
+        let locationId=req.location_id;
         let getQuery=`select ck2.partnumber,ck2.qty from currentStock2 ck2 join 
         currentStock1 ck1 on ck1.tcode=ck2.StockCode where locationId=@locationId`;
 
@@ -281,8 +349,8 @@ const getAllRecordsSingleLocation=async (req,res)=>{
 
     }
     catch(error){
-        console.log("error in service ",error.message)
+        console.log("error in  stock upload service get upload data single location",error.message)
         return error;
     }
 }
-export  {stockUploadSingleLocation,getPartNotInMasterSingleLocationInService,getAllRecordsSingleLocation}
+export  {stockUploadSingleLocation,getPartNotInMasterSingleLocationInService,getAllRecordsSingleLocation,getUploadedDataSingleLocationInService}
