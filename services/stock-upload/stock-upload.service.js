@@ -4,9 +4,10 @@ import {
   readExcelFileWithSubColumns,
 } from "../utilities/utilities.service.js";
 import sql from "mssql";
-import archiver from 'archiver'
+import yazl from 'yazl';
 import fs from 'fs';
 import path from 'path';
+import xlsx from 'xlsx';
 const stockUploadSingleLocation = async (req, res) => {
   const pool = await getPool1();
 
@@ -107,11 +108,45 @@ const stockUploadSingleLocation = async (req, res) => {
   await pool.request().input("brandId", brandId).query(deletePartMasterQuery);
 
   let updatedFilteredRowData = [];
+
+  let query12=`Select tcode from currentStock1 where locationId=@locationId`;
+  const res45=await pool.request().input('locationId',locationId).query(query12);
+ let  StockCode=res45?.recordset[0]?.tcode;
+  let countPrevRecords=0;
+  let insertedDataResult=[];
+
+  if(res45.recordset.length>0){
+
+      let insertedDataQuery = `Select partNumber,partID,qty from currentStock2 where Stockcode=@StockCode`;
+    
+      let result56 = await pool
+        .request()
+        .input("StockCode", StockCode)
+        .query(insertedDataQuery);
+       insertedDataResult = result56.recordset;
+      countPrevRecords = insertedDataResult.length;
+      
+      let deleteCodeQuery=`delete from currentStock1 where tcode=@stockCode`;
+      await pool
+        .request()
+        .input("StockCode", StockCode)
+        .query(deleteCodeQuery);
+      let deleteStockQuery=`delete from currentStock2 where stockcode=@stockCode`;
+      let result569 = await pool
+        .request()
+        .input("StockCode", StockCode)
+        .query(deleteStockQuery);
+    //   filteredRowData=insertedDataResult;
+  }
+//   console.log("filtered row data ",filteredRowData.length,insertedDataResult.length)
+
+//   console.log("filtered row data ",combinedData.length)
   for (const item of filteredRowData) {
     let deleteItem = false; // Flag to determine if the item should be deleted
 
     // Loop over the partMasterResult to find a match
     for (const element of partMasterResult) {
+        // console.log("element ",element)
       if (item.part_number === element.partnumber1.trim()) {
         // Add the partid to the item if a match is found
         item.partId = element.partID; // Directly mutate the original item
@@ -127,22 +162,25 @@ const stockUploadSingleLocation = async (req, res) => {
     // If no match was found, flag for deletion and add to partNotInMasterArray
     if (deleteItem) {
       const partnumber = item.part_number;
-      // console.log("partnumber ",partnumber)
+    //    console.log("partnumber ",item)
       const exists = partNotInMasterArray.some(
-        (item1) => item1.partNumber === partnumber
+        (item1) => item1.partnumber == partnumber
       );
       if (!exists) {
-        partNotInMasterArray.push({ partNumber: partnumber });
+        // console.log("exists ",partnumber)
+        partNotInMasterArray.push({ partnumber: partnumber });
       }
     }
   }
 
+  
   // Create a map to track the occurrences of part_number and total stock_qty
   const partCountMap = new Map();
 
   // First, count the occurrences and accumulate stock_qty for each part_number
   for (const element of updatedFilteredRowData) {
     // Assuming partMasterResult contains part_number and stock_qty
+    // console.log("element ",element)
     if (partCountMap.has(element.part_number)) {
       // console.log("part ",element);
       partCountMap.set(element.part_number, {
@@ -159,7 +197,9 @@ const stockUploadSingleLocation = async (req, res) => {
         partId: element.partId,
       });
     }
+
   }
+//   console.log("part count ",partCountMap)
 
   // console.log("updated filtered data ",partCountMap)
   updatedFilteredRowData = Array.from(
@@ -172,19 +212,18 @@ const stockUploadSingleLocation = async (req, res) => {
   );
   //   console.log("updated filtered data ",partCountMap);
 
-  let insertedDataQuery = `Select partID,qty,ck2.StockCode from currentStock2 ck2  join currentStock1 ck1 on ck2.StockCode=ck1.tcode where locationId=@locationId`;
-
-  let result56 = await pool
-    .request()
-    .input("locationId", locationId)
-    .query(insertedDataQuery);
-  let insertedDataResult = result56.recordset;
-  let countPrevRecords = insertedDataResult.length;
-
+  
   let quantitySumPrev = 0;
+  let rowCount;
+  let currentDate;
+  let formattedDate;
+  let tCode;
+  currentDate = new Date();
+  
+  formattedDate = currentDate.toISOString().split("T")[0]; // Outputs: '2025-03-08'
   if (insertedDataResult.length != 0) {
     // console.log("countRecords inserted ",countPrevRecords)
-    let StockCode = insertedDataResult[0].StockCode;
+    // StockCode = insertedDataResult[0].StockCode;
     let quanitySumQuery = `Select sum(qty) as QuantSum from currentStock2 where StockCode=@StockCode`;
 
     let result567 = await pool
@@ -225,34 +264,53 @@ const stockUploadSingleLocation = async (req, res) => {
       }
     });
 
+    
+
     //  console.log("after update ",updatedFilteredRowData);
 
     //   console.log(updatedFilteredRowData);
+
+   
+   
+    // console.log(formattedDate);
+    // let updateQueryForCurrentStock1 = `update currentStock1 set stockdate=@formattedDate,addedby=@addedBy,addeddate=Getdate() where tcode=@StockCode`;
+  
+    // const result178 = await pool
+    //   .request()
+    //   .input("formattedDate", formattedDate)
+    //   .input("addedBy", addedBy)
+    //   .input('StockCode',StockCode)
+    //   .query(updateQueryForCurrentStock1);
+    
   }
+  
+    rowCount = updatedFilteredRowData?.length;
+    let insertQueryForCurrentStock1 = `insert into currentStock1(locationID,stockdate,addedby) output inserted.tcode values(@locationID,@formattedDate,@addedBy)`;
+  
+    const result1 = await pool
+      .request()
+      .input("locationID", locationId)
+      .input("formattedDate", formattedDate)
+      .input("addedBy", addedBy)
+      .query(insertQueryForCurrentStock1);
+      StockCode = result1.recordset[0].tcode;
+   
+
+      
+    // tCode = result178.recordset[0].tcode;
+  
 
   // Log the updated partCountObj
   //  console.log(updatedFilteredRowData);
 
-  let rowCount = updatedFilteredRowData?.length;
-  let currentDate = new Date();
-  const formattedDate = currentDate.toISOString().split("T")[0]; // Outputs: '2025-03-08'
-  // console.log(formattedDate);
-  let insertQueryForCurrentStock1 = `insert into currentStock1(locationID,stockdate,addedby) output inserted.tcode values(@locationID,@formattedDate,@addedBy)`;
-
-  const result1 = await pool
-    .request()
-    .input("locationID", locationId)
-    .input("formattedDate", formattedDate)
-    .input("addedBy", addedBy)
-    .query(insertQueryForCurrentStock1);
-  let tCode = result1.recordset[0].tcode;
+ 
 
   //  console.log("tCode ",tCode)
-
+//  console.log("part not in master ",partNotInMasterArray)
   const values = partNotInMasterArray.map((item) => {
     return [
       parseInt(brandId, 10), // Ensure brandId is an integer
-      item["partNumber"],
+      item["partnumber"],
     ];
   });
   try {
@@ -277,7 +335,7 @@ const stockUploadSingleLocation = async (req, res) => {
   // console.log(filteredRowData[0])
   const values1 = updatedFilteredRowData.map((item) => {
     return [
-      parseInt(tCode, 10),
+      parseInt(StockCode, 10),
       item["partNumber"],
       parseFloat(item["qty"]),
       item["partId"],
@@ -303,13 +361,13 @@ const stockUploadSingleLocation = async (req, res) => {
     });
     await pool.request().bulk(table1);
   } catch (error) {
-    console.error("Error during bulk insert:", error);
+    console.error("Error during bulk insert in single upload: ", error);
     return error; // Rethrow the error for further handling if necessary
   }
-  let currentCountQuery = `select sum(qty) as currentQuantSum from currentStock2 where stockCode=@tCode`;
+  let currentCountQuery = `select sum(qty) as currentQuantSum from currentStock2 where stockCode=@StockCode`;
   let result678 = await pool
     .request()
-    .input("tCode", tCode)
+    .input("StockCode", StockCode)
     .query(currentCountQuery);
   let currentQuantSum = 0;
   if (result678.recordset.length != 0) {
@@ -317,10 +375,10 @@ const stockUploadSingleLocation = async (req, res) => {
   }
 
   let logQuery = `insert into Stock_Upload_Logs(location_id,stockCode,added_by,brand_id, stockUploadCount,operation_type,quantitySum,
-      prevStockUploadCount,prevQuantitySum) values(@locationId,@tCode,@addedBy,@brandId,@rowCount,'single-location upload stock',@currentQuantSum,@countPrevRecords,@quantitySumPrev)`;
+      prevStockUploadCount,prevQuantitySum) values(@locationId,@StockCode,@addedBy,@brandId,@rowCount,'single-location upload stock',@currentQuantSum,@countPrevRecords,@quantitySumPrev)`;
   await pool
     .request()
-    .input("tCode", tCode)
+    .input("StockCode", StockCode)
     .input("addedBy", addedBy)
     .input("currentQuantSum", currentQuantSum)
     .input("brandId", brandId)
@@ -411,11 +469,17 @@ const getUploadedDataSingleLocationInService = async (req, res) => {
 const stockUploadMultiLocation = async (req, res) => {
   // console.log("req ",req.body.location_id,req.files);
   try {
+    let location=req.body.location_id
     let locations = req.body.location_id;
-    // console.log("location ",locations)
+    // console.log(typeof location)
+    if(typeof location=='string'){
+        locations=[location];
+    }
+    //  console.log("location ",locations)
+
     let dealerId = parseInt(req.body.dealer_id);
     let files = req.files;
-
+    // console.log(files,files[0].path)
     const pool=await getPool1();
     let addedBy = parseInt(req.body.user_id);
 
@@ -448,7 +512,7 @@ const stockUploadMultiLocation = async (req, res) => {
     let partMasterResult = result.recordset;
     // console.log(" part master result in stock upload multi location ",partMasterResult)
     let partNotInMasterArray = [];
-    const getPartNumberQuery = `select partnumber from part_not_in_master where brand_id=@brandId`;
+    const getPartNumberQuery = `select partnumber as partnumber from part_not_in_master where brand_id=@brandId`;
     let res123 = await pool
       .request()
       .input("brandId", brandId)
@@ -458,6 +522,8 @@ const stockUploadMultiLocation = async (req, res) => {
 
     let deletePartMasterQuery = `delete from part_not_in_master where brand_id=@brandId`;
     await pool.request().input("brandId", brandId).query(deletePartMasterQuery);
+
+  
     let updatedFilteredRowData = [];
     // Create a map to track the occurrences of part_number and total stock_qty
     const partCountMap = new Map();
@@ -465,6 +531,7 @@ const stockUploadMultiLocation = async (req, res) => {
     for (let i = 0; i < locations.length; i++) {
         // console.log("exexuted ")
       let locationId = locations[i];
+
       let rowData;
       let fileData;
       let headers;
@@ -486,6 +553,36 @@ const stockUploadMultiLocation = async (req, res) => {
         availability: rowData1["availability"],
         status: rowData1["status"],
       }));
+
+      let query12=`Select tcode from currentStock1 where locationId=@locationId`;
+  const res45=await pool.request().input('locationId',locationId).query(query12);
+ let  StockCode=res45?.recordset[0]?.tcode;
+  let countPrevRecords=0;
+  let insertedDataResult=[];
+
+  if(res45.recordset.length>0){
+
+      let insertedDataQuery = `Select partNumber,partID,qty from currentStock2 where Stockcode=@StockCode`;
+    
+      let result56 = await pool
+        .request()
+        .input("StockCode", StockCode)
+        .query(insertedDataQuery);
+       insertedDataResult = result56.recordset;
+      countPrevRecords = insertedDataResult.length;
+     
+      let deleteCodeQuery=`delete from currentStock1 where tcode=@stockCode`;
+      await pool
+        .request()
+        .input("StockCode", StockCode)
+        .query(deleteCodeQuery);
+      let deleteStockQuery=`delete from currentStock2 where stockcode=@stockCode`;
+      let result569 = await pool
+        .request()
+        .input("StockCode", StockCode)
+        .query(deleteStockQuery);
+    //   filteredRowData=insertedDataResult;
+  }
 
       //  console.log("mapped data ",mappedResult)
       let filteredRowData = rowData.filter((row) => {
@@ -513,6 +610,17 @@ const stockUploadMultiLocation = async (req, res) => {
         }
       });
     //    console.log("filtered data in multi loc ",filteredRowData)
+    // const combinedData = filteredRowData.map(item => {
+    //     // Find matching entry in additionalData
+    //     const match = insertedDataResult.find(additional => additional.partNumber === item.part_number);
+        
+    //     if (match) {
+    //       // Add the qty values if there's a match
+    //       item.qty = (parseInt(item.qty) + match.qty).toString();  // Ensure qty is a string, as in the filteredData
+    //     }
+      
+    //     return item;
+    //   });
       for (const item of filteredRowData) {
         let deleteItem = false; // Flag to determine if the item should be deleted
 
@@ -535,12 +643,12 @@ const stockUploadMultiLocation = async (req, res) => {
         if (deleteItem) {
           const partnumber = item.part_number;
         //   console.log("item in stock upload multi location ",item,partnumber)
-          // console.log("partnumber ",partnumber)
+        //    console.log("partnumber ",partnumber,partNotInMasterArray[0])
           const exists = partNotInMasterArray.some(
-            (item1) => item1.partNumber === partnumber
+            (item1) => item1.partnumber === partnumber
           );
           if (!exists) {
-            partNotInMasterArray.push({ partNumber: partnumber });
+            partNotInMasterArray.push({ partnumber: partnumber });
           }
         }
       }
@@ -549,7 +657,7 @@ const stockUploadMultiLocation = async (req, res) => {
       for (const element of updatedFilteredRowData) {
         // Assuming partMasterResult contains part_number and stock_qty
         if (partCountMap.has(element.part_number)) {
-          // console.log("part ",element);
+        //    console.log("part ",element);
           partCountMap.set(element.part_number, {
             partId: element.partId,
             count: partCountMap.get(element.part_number).count + 1,
@@ -566,7 +674,7 @@ const stockUploadMultiLocation = async (req, res) => {
         }
       }
 
-      // console.log("updated filtered data ",partCountMap)
+    //    console.log("updated filtered data ",)
       updatedFilteredRowData = Array.from(
         partCountMap,
         ([partNumber, { stockQty, partId }]) => ({
@@ -576,7 +684,28 @@ const stockUploadMultiLocation = async (req, res) => {
         })
       );
       let quantitySumPrev = 0;
-      let countPrevRecords=0;
+       updatedFilteredRowData.forEach((item) => {
+      // console.log(item)
+      let partID = item.partId;
+      let qty = item.qty;
+
+      for (let i = 0; i < insertedDataResult.length; i++) {
+        const element = insertedDataResult[i];
+        // console.log(element,partID)
+        if (element.partID === partID) {
+          // Add the qty to the item.qty
+          item.qty = qty + element.qty;
+          break; // Exit the loop after the first match
+        }
+      }
+    });
+    updatedFilteredRowData.forEach((item) => {
+        // console.log(item)
+        let partID = item.partId;
+        let qty = item.qty;
+  
+       
+      });
       let rowCount = updatedFilteredRowData?.length;
       let currentDate = new Date();
       const formattedDate = currentDate.toISOString().split("T")[0]; // Outputs: '2025-03-08'
@@ -652,7 +781,7 @@ prevStockUploadCount,prevQuantitySum) values(@locationId,@tCode,@addedBy,@brandI
     const values = partNotInMasterArray.map((item) => {
       return [
         parseInt(brandId, 10), // Ensure brandId is an integer
-        item["partNumber"],
+        item["partnumber"],
       ];
     });
     try {
@@ -708,129 +837,150 @@ const getAllRecordsMultiLocation=async (req,res)=>{
 
 const getUploadedDataMultiLocationInService=async(req,res)=>{
 
-
+    const pool = await getPool1();
+    const locations = req.locations; // Assuming locations are passed in the request bod
+ 
+    // console.log(locations)
+  
     try {
-        const pool = await getPool1();
-        let locations=req.body.locations;
-        let data=[];
-        const zipFilePath = path.join(__dirname, 'locations.zip');
+        // Create a ZIP file in memory
+        const archive = new yazl.ZipFile();
     
-        // Create a file stream to which we will pipe the zip output
-        const output = fs.createWriteStream(zipFilePath);
-        
-        // Create a new archiver instance to handle the ZIP creation
-        const archive = archiver('zip', {
-          zlib: { level: 9 } // Maximum compression
-        });
-        
-        // Pipe archive data to the file stream
-        archive.pipe(output);
-        for(let i=0;i<locations.length;i++){
+        // Loop through locations and fetch data for each location
+        for (let i = 0; i < locations.length; i++) {
+          const locationId = locations[i].location;
+    
+        //   console.log("location id ",locationId)
+          try {
 
-            let locationId = req.location_id;
+            const getBrandQuery = `SELECT location FROM locationInfo WHERE locationId = @locationId`;
+            const result = await pool
+              .request()
+              .input('locationId', locationId)
+              .query(getBrandQuery);
+    
+            // let brandId = result.recordset[0].brandId;
+            let locationName=result.recordset[0].location;
             let getQuery = `select ck2.partnumber,ck2.qty from currentStock2 ck2 join 
                 currentStock1 ck1 on ck1.tcode=ck2.StockCode where locationId=@locationId`;
             
-           let res= await pool.request().input('locationId',locationId).query(getQuery);    
-        
+           let result1= await pool.request().input('locationId',locationId).query(getQuery);   
+            // Prepare data to store in the Excel file
+            let locationData;
+            if(result1.recordset.length>0){
+                 locationData = result1.recordset.map(record => ({
+                  Location: locationName,
+                  PartNumber: record.partnumber,
+                  Quantity:record.qty
+                }));
 
-           data.push(res.recordset);
-           const fileName = `location_${locationId}.json`; // Create a filename based on the location ID
-
-      // Add the file to the archive (in-memory, no need to create a physical file)
-      archive.append(JSON.stringify(result.recordset, null, 2), { name: fileName });
-
-      // Optionally delete the file after adding to the ZIP
-      fs.unlinkSync(filePath); // Delete the temp file after adding it to the ZIP
-
-        }
-
-        await archive.finalize();
-
-
-        res.download(zipFilePath, 'locations.zip', (err) => {
-            if (err) {
-              console.error('Error sending file:', err);
             }
-      
-            // Optionally, clean up the zip file after sending
-            fs.unlinkSync(zipFilePath);
-          });
+    
+            // Create an Excel file for the location
+            const ws = xlsx.utils.json_to_sheet(locationData);
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, 'Uploaded Data');
+    
+            // Write the Excel file to a temporary buffer (in-memory)
+            const tempBuffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+    
+            // Add the buffer directly to the ZIP file
+            archive.addBuffer(tempBuffer, `uploadedData_${locationName}.xlsx`);
+          } catch (error) {
+            console.error('Error in get uploaded data in multi:', error.message);
+          }
+        }
+    
+        // Finalize the ZIP file and return it as a buffer
+        const zipBuffer = await new Promise((resolve, reject) => {
+          const chunks = [];
+          archive.outputStream.on('data', chunk => chunks.push(chunk));
+          archive.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
+          archive.outputStream.on('error', reject);
+          archive.end();
+        });
+    
+        // Return the zipBuffer to be sent in the controller
+        return zipBuffer;
+    
       } catch (error) {
-        console.log(
-          "error in  stock upload service get upload data single location",
-          error.message
-        );
-        return error;
+        console.error('Error in service multilocation :', error.message);
+        throw new Error('Error generating ZIP file');
       }
-
+   
 }
 
 const getPartNotInMasterMultiLocationInService=async(req,res)=>{
 
+    const pool = await getPool1();
+    const locations = req.locations; // Assuming locations are passed in the request bod
+ 
+  
     try {
-        const pool = await getPool1();
-        let locations=req.body.locations;
-        let data=[];
-        const zipFilePath = path.join(__dirname, 'locations.zip');
+        // Create a ZIP file in memory
+        const archive = new yazl.ZipFile();
     
-        // Create a file stream to which we will pipe the zip output
-        const output = fs.createWriteStream(zipFilePath);
-        
-        // Create a new archiver instance to handle the ZIP creation
-        const archive = archiver('zip', {
-          zlib: { level: 9 } // Maximum compression
-        });
-        
-        // Pipe archive data to the file stream
-        archive.pipe(output);
-        for(let i=0;i<locations.length;i++){
-        let locationId = req.location_id;
+        // Loop through locations and fetch data for each location
+        for (let i = 0; i < locations.length; i++) {
+          const locationId = locations[i].location;
     
-        let getBrandQuery = `Select brandId from locationInfo where locationId=@locationId`;
-        const result = await pool
-          .request()
-          .input("locationId", locationId)
-          .query(getBrandQuery);
-        let brandId = result.recordset[0].brandId;
-        // console.log(brandId);
-        let getQuery = `Select partnumber from part_not_in_master where brand_id=@brandId`;
-        const result1 = await pool
-          .request()
-          .input("brandId", brandId)
-          .query(getQuery);
-        // console.log(result1.recordset)
-        data.push(result1.recordset);
-        //   result1.recordset;
-        const fileName = `location_${locationId}.json`; // Create a filename based on the location ID
-
-        // Add the file to the archive (in-memory, no need to create a physical file)
-        archive.append(JSON.stringify(result.recordset, null, 2), { name: fileName });
-  
-        // Optionally delete the file after adding to the ZIP
-        fs.unlinkSync(filePath); // Delete the temp file after adding it to the ZIP
-  
+          try {
+            // Fetch brandId for the location
+            const getBrandQuery = `SELECT brandId,location FROM locationInfo WHERE locationId = @locationId`;
+            const result = await pool
+              .request()
+              .input('locationId', locationId)
+              .query(getBrandQuery);
+    
+            let brandId = result.recordset[0].brandId;
+            let locationName=result.recordset[0].location;
+    
+            // Fetch partnumbers based on brandId
+            const getQuery = `SELECT partnumber FROM part_not_in_master WHERE brand_id = @brandId`;
+            const result1 = await pool
+              .request()
+              .input('brandId', brandId)
+              .query(getQuery);
+    
+            // Prepare data to store in the Excel file
+            const locationData = result1.recordset.map(record => ({
+              Location: locationName,
+              PartNumber: record.partnumber,
+            }));
+    
+            // Create an Excel file for the location
+            const ws = xlsx.utils.json_to_sheet(locationData);
+            const wb = xlsx.utils.book_new();
+            xlsx.utils.book_append_sheet(wb, ws, 'Part Not In Master');
+    
+            // Write the Excel file to a temporary buffer (in-memory)
+            const tempBuffer = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+    
+            // Add the buffer directly to the ZIP file
+            archive.addBuffer(tempBuffer, `part_not_in_master_${locationName}.xlsx`);
+          } catch (error) {
+            console.error('Error in get part not in master:', error.message);
+          }
         }
-
-        await archive.finalize();
-
-
-        res.download(zipFilePath, 'locations.zip', (err) => {
-            if (err) {
-              console.error('Error sending file:', err);
-            }
-      
-            // Optionally, clean up the zip file after sending
-            fs.unlinkSync(zipFilePath);
-          });
-          // Optionally, clean up the zip file after sending
-          fs.unlinkSync(zipFilePath);
+    
+        // Finalize the ZIP file and return it as a buffer
+        const zipBuffer = await new Promise((resolve, reject) => {
+          const chunks = [];
+          archive.outputStream.on('data', chunk => chunks.push(chunk));
+          archive.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
+          archive.outputStream.on('error', reject);
+          archive.end();
+        });
+    
+        // Return the zipBuffer to be sent in the controller
+        return zipBuffer;
     
       } catch (error) {
-        console.log("error in service ", error.message);
-        return error;
+        console.error('Error in part not in master multi loc service:', error.message);
+        throw new Error('Error generating ZIP file');
       }
 }
+
 export {
   stockUploadSingleLocation,
   getPartNotInMasterSingleLocationInService,
