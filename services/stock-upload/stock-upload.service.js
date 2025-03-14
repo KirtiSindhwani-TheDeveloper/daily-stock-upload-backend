@@ -524,14 +524,12 @@ const stockUploadMultiLocation = async (req, res) => {
     await pool.request().input("brandId", brandId).query(deletePartMasterQuery);
 
   
-    let updatedFilteredRowData = [];
-    // Create a map to track the occurrences of part_number and total stock_qty
-    const partCountMap = new Map();
-
+   
+   
     for (let i = 0; i < locations.length; i++) {
         // console.log("exexuted ")
       let locationId = locations[i];
-
+      let updatedFilteredRowData = [];
       let rowData;
       let fileData;
       let headers;
@@ -559,7 +557,7 @@ const stockUploadMultiLocation = async (req, res) => {
  let  StockCode=res45?.recordset[0]?.tcode;
   let countPrevRecords=0;
   let insertedDataResult=[];
-
+// console.log("tcode ",StockCode,locationId)
   if(res45.recordset.length>0){
 
       let insertedDataQuery = `Select partNumber,partID,qty from currentStock2 where Stockcode=@StockCode`;
@@ -610,17 +608,7 @@ const stockUploadMultiLocation = async (req, res) => {
         }
       });
     //    console.log("filtered data in multi loc ",filteredRowData)
-    // const combinedData = filteredRowData.map(item => {
-    //     // Find matching entry in additionalData
-    //     const match = insertedDataResult.find(additional => additional.partNumber === item.part_number);
-        
-    //     if (match) {
-    //       // Add the qty values if there's a match
-    //       item.qty = (parseInt(item.qty) + match.qty).toString();  // Ensure qty is a string, as in the filteredData
-    //     }
-      
-    //     return item;
-    //   });
+  
       for (const item of filteredRowData) {
         let deleteItem = false; // Flag to determine if the item should be deleted
 
@@ -652,7 +640,14 @@ const stockUploadMultiLocation = async (req, res) => {
           }
         }
       }
+    // console.log("partr not in master ",updatedFilteredRowData)
+    // console.log("inserted data ",insertedDataResult)
 
+  
+    const partCountMap = new Map();
+
+  
+    //    console.log("combined data wiht location id ",locationId,combinedData)
       // First, count the occurrences and accumulate stock_qty for each part_number
       for (const element of updatedFilteredRowData) {
         // Assuming partMasterResult contains part_number and stock_qty
@@ -673,9 +668,9 @@ const stockUploadMultiLocation = async (req, res) => {
           });
         }
       }
-
+    //    console.log("part count ",partCountMap)
     //    console.log("updated filtered data ",)
-      updatedFilteredRowData = Array.from(
+     let  updatedFilteredRowData1 = Array.from(
         partCountMap,
         ([partNumber, { stockQty, partId }]) => ({
           partNumber,
@@ -683,30 +678,30 @@ const stockUploadMultiLocation = async (req, res) => {
           partId: partId,
         })
       );
-      let quantitySumPrev = 0;
-       updatedFilteredRowData.forEach((item) => {
-      // console.log(item)
-      let partID = item.partId;
-      let qty = item.qty;
-
-      for (let i = 0; i < insertedDataResult.length; i++) {
-        const element = insertedDataResult[i];
-        // console.log(element,partID)
-        if (element.partID === partID) {
-          // Add the qty to the item.qty
-          item.qty = qty + element.qty;
-          break; // Exit the loop after the first match
-        }
-      }
-    });
-    updatedFilteredRowData.forEach((item) => {
-        // console.log(item)
-        let partID = item.partId;
-        let qty = item.qty;
+// console.log("updated filtered data ",updatedFilteredRowData1);
+const combinedData = updatedFilteredRowData1.map(item => {
+    // Check if part_number exists
+    if (!item.partNumber) {
+    //   console.error(`Missing part_number in item:`, item);
+      return item; // Skip or handle the missing data
+    }
   
-       
-      });
-      let rowCount = updatedFilteredRowData?.length;
+    const match = insertedDataResult.find(additional => additional.partNumber === item.partNumber);
+  
+    if (match) {
+      item.qty = (parseInt(item.qty) + match.qty).toString();  // Ensure qty is a string
+    }
+  
+    return item;
+  });
+
+//   console.log("location id combine data ",locationId,combinedData)
+   // Create a map to track the occurrences of part_number and total stock_qty
+   let updatedFilteredRowData2=combinedData;
+      let quantitySumPrev = 0;
+      
+    
+      let rowCount = updatedFilteredRowData2?.length;
       let currentDate = new Date();
       const formattedDate = currentDate.toISOString().split("T")[0]; // Outputs: '2025-03-08'
       // console.log(formattedDate);
@@ -720,7 +715,7 @@ const stockUploadMultiLocation = async (req, res) => {
         .query(insertQueryForCurrentStock1);
       let tCode = result1.recordset[0].tcode;
 
-      const values1 = updatedFilteredRowData.map((item) => {
+      const values1 = updatedFilteredRowData2.map((item) => {
         return [
           parseInt(tCode, 10),
           item["partNumber"],
