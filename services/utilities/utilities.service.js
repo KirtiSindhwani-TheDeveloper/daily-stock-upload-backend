@@ -218,10 +218,10 @@ export const  getDealersBasedOnBrandIDInService=async function(req){
 
 
 // Prepare the SQL query for inserting data into SIMS_STOCK_FILE
-brand_id=req.brand_id;
+    let brand_id=req.brand_id;
 
 const query = `
-   Select distinct dealerID as dealer_id,dealer as dealer_name from z_scope.dbo.locationinfo where brandID=@brand_id and dealerStatus=1 order by dealer;
+   Select distinct dealerID as dealer_id,dealer as dealer_name from locationinfo where brandID=@brand_id and dealerStatus=1 order by dealer;
   `;
 
   // Execute the insert query for each row

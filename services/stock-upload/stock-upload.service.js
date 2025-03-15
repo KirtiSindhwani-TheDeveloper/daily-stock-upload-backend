@@ -115,6 +115,7 @@ const stockUploadSingleLocation = async (req, res) => {
   let countPrevRecords=0;
   let insertedDataResult=[];
 
+  let quantitySumPrev = 0;
   if(res45.recordset.length>0){
 
       let insertedDataQuery = `Select partNumber,partID,qty from currentStock2 where Stockcode=@StockCode`;
@@ -125,7 +126,35 @@ const stockUploadSingleLocation = async (req, res) => {
         .query(insertedDataQuery);
        insertedDataResult = result56.recordset;
       countPrevRecords = insertedDataResult.length;
-      
+      console.log("stock code ",StockCode)
+      if (insertedDataResult.length != 0) {
+        // console.log("countRecords inserted ",countPrevRecords)
+        // StockCode = insertedDataResult[0].StockCode;
+        let quanitySumQuery = `Select sum(qty) as QuantSum from currentStock2 where StockCode=@StockCode`;
+    
+        let result567 = await pool
+          .request()
+          .input("StockCode", StockCode)
+          .query(quanitySumQuery);
+        console.log("quantity sum ",result567.recordset)
+        if (result567.recordset.length != 0) {
+          quantitySumPrev = result567.recordset[0].QuantSum;
+          // console.log("quant sum prev ",quantitySumPrev);
+          let deleteQuery = `delete from currentStock2  where StockCode=@stockCode`;
+          await pool
+            .request()
+            .input("stockCode", insertedDataResult[0].StockCode)
+            .query(deleteQuery);
+    
+          let deleteQuery1 = `delete from currentStock1  where tcode=@stockCode`;
+          await pool
+            .request()
+            .input("stockCode", insertedDataResult[0].StockCode)
+            .query(deleteQuery1);
+        }
+    
+       
+      }
       let deleteCodeQuery=`delete from currentStock1 where tcode=@stockCode`;
       await pool
         .request()
@@ -159,6 +188,7 @@ const stockUploadSingleLocation = async (req, res) => {
       }
     }
 
+    // console.log("updated filtered row ",updatedFilteredRowData)
     // If no match was found, flag for deletion and add to partNotInMasterArray
     if (deleteItem) {
       const partnumber = item.part_number;
@@ -201,7 +231,7 @@ const stockUploadSingleLocation = async (req, res) => {
   }
 //   console.log("part count ",partCountMap)
 
-  // console.log("updated filtered data ",partCountMap)
+//    console.log("updated filtered data ",partCountMap)
   updatedFilteredRowData = Array.from(
     partCountMap,
     ([partNumber, { stockQty, partId }]) => ({
@@ -210,10 +240,8 @@ const stockUploadSingleLocation = async (req, res) => {
       partId: partId,
     })
   );
-  //   console.log("updated filtered data ",partCountMap);
+    //  console.log("updated filtered data ",updatedFilteredRowData);
 
-  
-  let quantitySumPrev = 0;
   let rowCount;
   let currentDate;
   let formattedDate;
@@ -224,28 +252,28 @@ const stockUploadSingleLocation = async (req, res) => {
   if (insertedDataResult.length != 0) {
     // console.log("countRecords inserted ",countPrevRecords)
     // StockCode = insertedDataResult[0].StockCode;
-    let quanitySumQuery = `Select sum(qty) as QuantSum from currentStock2 where StockCode=@StockCode`;
+    // let quanitySumQuery = `Select sum(qty) as QuantSum from currentStock2 where StockCode=@StockCode`;
 
-    let result567 = await pool
-      .request()
-      .input("StockCode", StockCode)
-      .query(quanitySumQuery);
+    // let result567 = await pool
+    //   .request()
+    //   .input("StockCode", StockCode)
+    //   .query(quanitySumQuery);
 
-    if (result567.recordset.length != 0) {
-      quantitySumPrev = result567.recordset[0].QuantSum;
-      // console.log("quant sum prev ",quantitySumPrev);
-      let deleteQuery = `delete from currentStock2  where StockCode=@stockCode`;
-      await pool
-        .request()
-        .input("stockCode", insertedDataResult[0].StockCode)
-        .query(deleteQuery);
+    // if (result567.recordset.length != 0) {
+    //   quantitySumPrev = result567.recordset[0].QuantSum;
+    // //    console.log("quant sum prev ",quantitySumPrev);
+    //   let deleteQuery = `delete from currentStock2  where StockCode=@stockCode`;
+    //   await pool
+    //     .request()
+    //     .input("stockCode", insertedDataResult[0].StockCode)
+    //     .query(deleteQuery);
 
-      let deleteQuery1 = `delete from currentStock1  where tcode=@stockCode`;
-      await pool
-        .request()
-        .input("stockCode", insertedDataResult[0].StockCode)
-        .query(deleteQuery1);
-    }
+    //   let deleteQuery1 = `delete from currentStock1  where tcode=@stockCode`;
+    //   await pool
+    //     .request()
+    //     .input("stockCode", insertedDataResult[0].StockCode)
+    //     .query(deleteQuery1);
+    // }
 
     // console.log("updatedFiltered ",updatedFilteredRowData)
     updatedFilteredRowData.forEach((item) => {
@@ -263,24 +291,6 @@ const stockUploadSingleLocation = async (req, res) => {
         }
       }
     });
-
-    
-
-    //  console.log("after update ",updatedFilteredRowData);
-
-    //   console.log(updatedFilteredRowData);
-
-   
-   
-    // console.log(formattedDate);
-    // let updateQueryForCurrentStock1 = `update currentStock1 set stockdate=@formattedDate,addedby=@addedBy,addeddate=Getdate() where tcode=@StockCode`;
-  
-    // const result178 = await pool
-    //   .request()
-    //   .input("formattedDate", formattedDate)
-    //   .input("addedBy", addedBy)
-    //   .input('StockCode',StockCode)
-    //   .query(updateQueryForCurrentStock1);
     
   }
   
@@ -426,11 +436,13 @@ const getAllRecordsSingleLocation = async (req, res) => {
   try {
     const pool = await getPool1();
     let locationId = req.location_id;
-    let getQuery = `select added_on,added_by,stockUploadCount,quantitySum,prevQuantitySum,prevStockUploadCount from stock_upload_logs where location_id=@locationId`;
+    let userId=req.added_by;
+    let getQuery = `select added_on,added_by,stockUploadCount,quantitySum,prevQuantitySum,prevStockUploadCount from stock_upload_logs where location_id=@locationId and added_by=@userId`;
 
     const result = await pool
       .request()
       .input("locationId", locationId)
+      .input("userId", userId)
       .query(getQuery);
 
     return result.recordset;
@@ -533,7 +545,7 @@ const stockUploadMultiLocation = async (req, res) => {
       let rowData;
       let fileData;
       let headers;
-      let rowDataArray;
+      let rowDataArray=[];
       if (brandId == 11 || brandId == 33) {
         fileData = await readExcelFileWithSubColumns(files[i].path);
         // rowData=fileData.data.splice(2);
@@ -668,9 +680,10 @@ const stockUploadMultiLocation = async (req, res) => {
           });
         }
       }
-    //    console.log("part count ",partCountMap)
+        //  console.log("part count ",partCountMap)
     //    console.log("updated filtered data ",)
-     let  updatedFilteredRowData1 = Array.from(
+    let updatedFilteredRowData1=[];
+      updatedFilteredRowData1 = Array.from(
         partCountMap,
         ([partNumber, { stockQty, partId }]) => ({
           partNumber,
@@ -697,7 +710,8 @@ const combinedData = updatedFilteredRowData1.map(item => {
 
 //   console.log("location id combine data ",locationId,combinedData)
    // Create a map to track the occurrences of part_number and total stock_qty
-   let updatedFilteredRowData2=combinedData;
+   let updatedFilteredRowData2=[];
+   updatedFilteredRowData2 =combinedData;
       let quantitySumPrev = 0;
       
     
@@ -809,13 +823,15 @@ const getAllRecordsMultiLocation=async (req,res)=>{
         const pool = await getPool1();
         let locations=req.locations;
         let data=[];
+        let userId=req.added_by;
         for(let i=0;i<locations.length;i++){
             let locationId =locations[i].location;
-            let getQuery = `select location_id,added_on,added_by,stockUploadCount,quantitySum,prevQuantitySum,prevStockUploadCount from stock_upload_logs where location_id=@locationId`;
+            let getQuery = `select location_id,added_on,added_by,stockUploadCount,quantitySum,prevQuantitySum,prevStockUploadCount from stock_upload_logs where location_id=@locationId and added_by=@userId`;
     
             let result = await pool
               .request()
               .input("locationId", locationId)
+              .input("userId", userId)
               .query(getQuery);
         
             data.push(result.recordset);
