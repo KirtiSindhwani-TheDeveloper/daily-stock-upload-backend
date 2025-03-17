@@ -10,8 +10,8 @@ app.use(express.json());
 //     console.log(`Received ${req.method} request for ${req.originalUrl}`); // Logs the method and URL of the request
 //     next(); // Proceed to the next middleware/route handler
 //   });
-
-const PORT = process.env.PORT
+ 
+const PORT = process.env.PORT || 3000
 connectDB()
 .then(()=>{
     
