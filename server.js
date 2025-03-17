@@ -11,7 +11,7 @@ app.use(express.json());
 //     next(); // Proceed to the next middleware/route handler
 //   });
 
-const PORT = 3000
+const PORT = process.env.PORT
 connectDB()
 .then(()=>{
     

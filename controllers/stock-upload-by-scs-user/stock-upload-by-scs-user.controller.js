@@ -1,8 +1,8 @@
-import {singleUploadStockInService,getAllRecords }from '../../services/stock-upload-by-scs-user/stock-upload-by-scs-user.service.js'
+import {singleUploadStockInService,getAllRecords,uploadBulkStock }from '../../services/stock-upload-by-scs-user/stock-upload-by-scs-user.service.js'
 const singleUploadStock=async (req,res)=>{
     try{
         const result=await singleUploadStockInService(req);
-        res.status(200).json({message:'Uploaded Successfully',data:result});
+        res.status(200).json({data:result});
     }
     catch(error){
         res.status(201).json({error:error.message})
@@ -41,4 +41,16 @@ const allRecordsSingleUpload=async(req,res)=>{
         res.status(201).json({error:error.message})
     }
 }
-export {singleUploadStock,getPartNotInMasterSingleUpload,singleUploadedData,allRecordsSingleUpload}
+
+const bulkStockUpload=async(req,res)=>{
+
+    try{
+        const result=await uploadBulkStock(req.body);
+        res.status(200).json({message:'Fetched Successfully',data:result});
+    }
+    catch(error){
+        res.status(201).json({error:error.message})
+    }
+}
+export {singleUploadStock,getPartNotInMasterSingleUpload,singleUploadedData,
+    allRecordsSingleUpload,bulkStockUpload}
